@@ -1,4 +1,4 @@
-name: Build Unigram (Official Method)
+name: Build Unigram Stable
 
 on:
   workflow_dispatch:
@@ -14,9 +14,9 @@ jobs:
 
     steps:
 
-    ############################################
-    # Checkout (NO recursive because VLC broken)
-    ############################################
+##########################################################
+# Checkout (必须禁用recursive，否则VLC失败)
+##########################################################
 
     - name: Checkout Unigram
       uses: actions/checkout@v4
@@ -26,11 +26,11 @@ jobs:
         submodules: false
 
 
-    ############################################
-    # Init submodules except VLC
-    ############################################
+##########################################################
+# Init submodules（排除VLC）
+##########################################################
 
-    - name: Init Submodules
+    - name: Init submodules
       run: |
 
         git submodule update --init Libraries/rlottie
@@ -39,23 +39,20 @@ jobs:
         git submodule update --init Libraries/tgcalls
 
 
-    ############################################
-    # Setup Visual Studio tools
-    ############################################
+##########################################################
+# VS tools
+##########################################################
 
-    - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v2
+    - uses: microsoft/setup-msbuild@v2
 
-
-    - name: Setup NuGet
-      uses: NuGet/setup-nuget@v2
+    - uses: NuGet/setup-nuget@v2
 
 
-    ############################################
-    # Create Telegram Constants
-    ############################################
+##########################################################
+# Constants.Secret.cs
+##########################################################
 
-    - name: Create Constants.Secret.cs
+    - name: Create Constants
       shell: powershell
       run: |
 
@@ -77,9 +74,9 @@ jobs:
         "@ | Out-File Unigram\Telegram\Constants.Secret.cs -Encoding utf8
 
 
-    ############################################
-    # Setup vcpkg
-    ############################################
+##########################################################
+# vcpkg
+##########################################################
 
     - name: Clone vcpkg
       run: git clone https://github.com/Microsoft/vcpkg.git
@@ -96,29 +93,31 @@ jobs:
         .\bootstrap-vcpkg.bat
 
 
-    ############################################
-    # Apply vcpkg patch (official requirement)
-    ############################################
+##########################################################
+# ffmpeg patch（替代官方patch）
+##########################################################
 
-    - name: Patch vcpkg
+    - name: Patch ffmpeg
       shell: powershell
       run: |
 
-        Copy-Item Libraries\vcpkg.patch vcpkg\ -Force
+        $file="vcpkg\ports\ffmpeg\portfile.cmake"
 
-        cd vcpkg
+        (Get-Content $file) `
+        -replace "--enable-libvpx",
+        "--disable-everything --enable-protocol=file --enable-libopus --enable-libdav1d --enable-libvpx --enable-decoder=h264 --enable-decoder=hevc --enable-decoder=vp8 --enable-decoder=vp9 --enable-decoder=aac --enable-decoder=opus --enable-decoder=flac --enable-decoder=mp3 --enable-demuxer=matroska --enable-demuxer=mov --enable-demuxer=ogg --enable-demuxer=wav --enable-muxer=mp4" `
+        | Set-Content $file
 
-        git apply vcpkg.patch
 
+##########################################################
+# Install libraries
+##########################################################
 
-    ############################################
-    # Install native dependencies
-    ############################################
-
-    - name: Install libraries
+    - name: Install vcpkg libs
       run: |
 
         vcpkg\vcpkg.exe install ffmpeg[dav1d,opus,vpx]:x64-uwp
+
         vcpkg\vcpkg.exe install lz4:x64-uwp
         vcpkg\vcpkg.exe install openssl:x64-uwp
         vcpkg\vcpkg.exe install zlib:x64-uwp
@@ -129,20 +128,51 @@ jobs:
         vcpkg\vcpkg.exe integrate install
 
 
-    ############################################
-    # Build LibVLC (OFFICIAL METHOD)
-    ############################################
+##########################################################
+# TDLib (必须，否则链接失败)
+##########################################################
 
-    - name: Install Docker
+    - name: Build TDLib
+      shell: powershell
       run: |
 
-        choco install docker-desktop -y
+        git clone https://github.com/tdlib/td.git
+
+        cd td
+
+        git clone https://github.com/Microsoft/vcpkg.git
+
+        cd vcpkg
+
+        git checkout $env:VCPKG_COMMIT
+
+        .\bootstrap-vcpkg.bat
+
+        .\vcpkg.exe install gperf:x86-windows
+        .\vcpkg.exe install openssl:x64-uwp
+        .\vcpkg.exe install zlib:x64-uwp
+
+        cd ..
+
+        cd example\uwp
+
+        powershell -ExecutionPolicy ByPass ./build.ps1 `
+          -vcpkg_root ../../vcpkg `
+          -nupkg
+
+        copy *.nupkg ..\..\Libraries\
+
+
+##########################################################
+# LibVLC build（官方方式）
+##########################################################
+
+    - name: Install Docker
+      run: choco install docker-desktop -y
 
 
     - name: Start Docker
-      run: |
-
-        net start com.docker.service
+      run: net start com.docker.service
 
 
     - name: Build LibVLC
@@ -154,46 +184,46 @@ jobs:
         powershell -ExecutionPolicy ByPass ./build.ps1 -arch x64
 
 
-    ############################################
-    # Restore NuGet
-    ############################################
+##########################################################
+# Restore NuGet
+##########################################################
 
-    - name: Restore NuGet
+    - name: Restore
       run: nuget restore Telegram.sln
 
 
-    ############################################
-    # Build Solution
-    ############################################
+##########################################################
+# Build
+##########################################################
 
-    - name: Build Unigram
+    - name: Build Solution
       run: |
 
         msbuild Telegram.sln ^
-        /p:Configuration=Release ^
-        /p:Platform=x64 ^
-        /m
+          /p:Configuration=Release ^
+          /p:Platform=x64 ^
+          /m
 
 
-    ############################################
-    # Package MSIX
-    ############################################
+##########################################################
+# Package
+##########################################################
 
     - name: Package MSIX
       run: |
 
         msbuild Telegram.Msix/Telegram.Msix.wapproj ^
-        /p:Configuration=Release ^
-        /p:Platform=x64
+          /p:Configuration=Release ^
+          /p:Platform=x64
 
 
-    ############################################
-    # Upload Artifact
-    ############################################
+##########################################################
+# Upload
+##########################################################
 
-    - name: Upload Artifact
+    - name: Upload MSIX
       uses: actions/upload-artifact@v4
       with:
-        name: Unigram-MSIX
+        name: Unigram
         path: |
           **/*.msix*
