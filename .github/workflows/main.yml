@@ -1,4 +1,4 @@
-name: Build Unigram
+name: Build Unigram (Official Method)
 
 on:
   workflow_dispatch:
@@ -14,21 +14,46 @@ jobs:
 
     steps:
 
-    - name: Checkout
+    ############################################
+    # Checkout (NO recursive because VLC broken)
+    ############################################
+
+    - name: Checkout Unigram
       uses: actions/checkout@v4
       with:
         repository: UnigramDev/Unigram
-        submodules: recursive
+        fetch-depth: 1
+        submodules: false
+
+
+    ############################################
+    # Init submodules except VLC
+    ############################################
+
+    - name: Init Submodules
+      run: |
+
+        git submodule update --init Libraries/rlottie
+        git submodule update --init Libraries/opus
+        git submodule update --init Libraries/usrsctp
+        git submodule update --init Libraries/tgcalls
+
+
+    ############################################
+    # Setup Visual Studio tools
+    ############################################
 
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
 
+
     - name: Setup NuGet
       uses: NuGet/setup-nuget@v2
 
-    #################################################
-    # Create Telegram constants
-    #################################################
+
+    ############################################
+    # Create Telegram Constants
+    ############################################
 
     - name: Create Constants.Secret.cs
       shell: powershell
@@ -43,24 +68,24 @@ jobs:
             {
                 static Constants()
                 {
-                    ApiId = ${{ secrets.API_ID }};
-                    ApiHash = "${{ secrets.API_HASH }}";
-                    AppChannel = "unigram-ci";
+                    ApiId = 123456;
+                    ApiHash = "abcdef123456";
+                    AppChannel = "ci";
                 }
             }
         }
         "@ | Out-File Unigram\Telegram\Constants.Secret.cs -Encoding utf8
 
 
-    #################################################
+    ############################################
     # Setup vcpkg
-    #################################################
+    ############################################
 
     - name: Clone vcpkg
-      run: |
-        git clone https://github.com/Microsoft/vcpkg.git
+      run: git clone https://github.com/Microsoft/vcpkg.git
 
-    - name: Setup vcpkg
+
+    - name: Bootstrap vcpkg
       shell: powershell
       run: |
 
@@ -71,9 +96,9 @@ jobs:
         .\bootstrap-vcpkg.bat
 
 
-    #################################################
-    # Patch ffmpeg
-    #################################################
+    ############################################
+    # Apply vcpkg patch (official requirement)
+    ############################################
 
     - name: Patch vcpkg
       shell: powershell
@@ -86,11 +111,11 @@ jobs:
         git apply vcpkg.patch
 
 
-    #################################################
-    # Install native libs
-    #################################################
+    ############################################
+    # Install native dependencies
+    ############################################
 
-    - name: Install vcpkg libs
+    - name: Install libraries
       run: |
 
         vcpkg\vcpkg.exe install ffmpeg[dav1d,opus,vpx]:x64-uwp
@@ -104,17 +129,42 @@ jobs:
         vcpkg\vcpkg.exe integrate install
 
 
-    #################################################
-    # Restore NuGet
-    #################################################
+    ############################################
+    # Build LibVLC (OFFICIAL METHOD)
+    ############################################
 
-    - name: Restore
+    - name: Install Docker
+      run: |
+
+        choco install docker-desktop -y
+
+
+    - name: Start Docker
+      run: |
+
+        net start com.docker.service
+
+
+    - name: Build LibVLC
+      shell: powershell
+      run: |
+
+        cd Libraries\vlc
+
+        powershell -ExecutionPolicy ByPass ./build.ps1 -arch x64
+
+
+    ############################################
+    # Restore NuGet
+    ############################################
+
+    - name: Restore NuGet
       run: nuget restore Telegram.sln
 
 
-    #################################################
-    # Build
-    #################################################
+    ############################################
+    # Build Solution
+    ############################################
 
     - name: Build Unigram
       run: |
@@ -125,9 +175,9 @@ jobs:
         /m
 
 
-    #################################################
-    # Package
-    #################################################
+    ############################################
+    # Package MSIX
+    ############################################
 
     - name: Package MSIX
       run: |
@@ -137,13 +187,13 @@ jobs:
         /p:Platform=x64
 
 
-    #################################################
-    # Upload
-    #################################################
+    ############################################
+    # Upload Artifact
+    ############################################
 
-    - name: Upload
+    - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Unigram
+        name: Unigram-MSIX
         path: |
           **/*.msix*
