@@ -1,0 +1,149 @@
+name: Build Unigram
+
+on:
+  workflow_dispatch:
+
+jobs:
+
+  build:
+
+    runs-on: windows-2022
+
+    env:
+      VCPKG_COMMIT: cff6ed45719c0162fa7065fdac90506a0add812c
+
+    steps:
+
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        repository: UnigramDev/Unigram
+        submodules: recursive
+
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Setup NuGet
+      uses: NuGet/setup-nuget@v2
+
+    #################################################
+    # Create Telegram constants
+    #################################################
+
+    - name: Create Constants.Secret.cs
+      shell: powershell
+      run: |
+
+        mkdir Unigram\Telegram -Force
+
+        @"
+        namespace Telegram
+        {
+            public static partial class Constants
+            {
+                static Constants()
+                {
+                    ApiId = ${{ secrets.API_ID }};
+                    ApiHash = "${{ secrets.API_HASH }}";
+                    AppChannel = "unigram-ci";
+                }
+            }
+        }
+        "@ | Out-File Unigram\Telegram\Constants.Secret.cs -Encoding utf8
+
+
+    #################################################
+    # Setup vcpkg
+    #################################################
+
+    - name: Clone vcpkg
+      run: |
+        git clone https://github.com/Microsoft/vcpkg.git
+
+    - name: Setup vcpkg
+      shell: powershell
+      run: |
+
+        cd vcpkg
+
+        git checkout $env:VCPKG_COMMIT
+
+        .\bootstrap-vcpkg.bat
+
+
+    #################################################
+    # Patch ffmpeg
+    #################################################
+
+    - name: Patch vcpkg
+      shell: powershell
+      run: |
+
+        Copy-Item Libraries\vcpkg.patch vcpkg\ -Force
+
+        cd vcpkg
+
+        git apply vcpkg.patch
+
+
+    #################################################
+    # Install native libs
+    #################################################
+
+    - name: Install vcpkg libs
+      run: |
+
+        vcpkg\vcpkg.exe install ffmpeg[dav1d,opus,vpx]:x64-uwp
+        vcpkg\vcpkg.exe install lz4:x64-uwp
+        vcpkg\vcpkg.exe install openssl:x64-uwp
+        vcpkg\vcpkg.exe install zlib:x64-uwp
+        vcpkg\vcpkg.exe install libogg:x64-uwp
+        vcpkg\vcpkg.exe install opus:x64-uwp
+        vcpkg\vcpkg.exe install boost-regex:x64-uwp
+
+        vcpkg\vcpkg.exe integrate install
+
+
+    #################################################
+    # Restore NuGet
+    #################################################
+
+    - name: Restore
+      run: nuget restore Telegram.sln
+
+
+    #################################################
+    # Build
+    #################################################
+
+    - name: Build Unigram
+      run: |
+
+        msbuild Telegram.sln ^
+        /p:Configuration=Release ^
+        /p:Platform=x64 ^
+        /m
+
+
+    #################################################
+    # Package
+    #################################################
+
+    - name: Package MSIX
+      run: |
+
+        msbuild Telegram.Msix/Telegram.Msix.wapproj ^
+        /p:Configuration=Release ^
+        /p:Platform=x64
+
+
+    #################################################
+    # Upload
+    #################################################
+
+    - name: Upload
+      uses: actions/upload-artifact@v4
+      with:
+        name: Unigram
+        path: |
+          **/*.msix*
