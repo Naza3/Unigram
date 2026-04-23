@@ -23,11 +23,20 @@ using Windows.UI.Xaml;
 
 namespace Telegram.ViewModels
 {
+    public enum ChatMemberRank
+    {
+        Owner,
+        Admin,
+        Other
+    };
+
+    public record ChatMemberTag(ChatMemberRank Rank, string Tag);
+
     public partial class MessageDelegate : ViewModelBase, IMessageDelegate
     {
         private readonly ViewModelBase _viewModel;
 
-        protected static readonly ConcurrentDictionary<long, IDictionary<long, ChatAdministrator>> _admins = new();
+        protected static readonly ConcurrentDictionary<long, Dictionary<long, ChatMemberTag>> _admins = new();
 
         public MessageDelegate(ViewModelBase viewModel)
             : base(viewModel.ClientService, viewModel.Settings, viewModel.Aggregator)
@@ -178,52 +187,52 @@ namespace Telegram.ViewModels
             MessageHelper.OpenUrl(ClientService, NavigationService, url, untrust, source);
         }
 
-        public string GetAdminTitle(MessageViewModel message)
+        public string GetMemberTag(MessageViewModel message, out ChatMemberRank rank)
         {
             if (message.IsChannelPost)
             {
+                rank = ChatMemberRank.Other;
                 return string.Empty;
             }
 
             if (message.SenderId is MessageSenderUser senderUser)
             {
-                return GetAdminTitle(senderUser.UserId);
+                return GetAdminTitle(message, senderUser.UserId, out rank);
             }
             else if (message.SenderId is MessageSenderChat senderChat && !message.IsChannelPost)
             {
+                rank = ChatMemberRank.Other;
                 return message.AuthorSignature.Length > 0 ? message.AuthorSignature : senderChat.ChatId == Chat.Id ? Strings.ChannelAdmin : string.Empty;
             }
 
+            rank = ChatMemberRank.Other;
             return string.Empty;
         }
 
-        public string GetAdminTitle(long userId)
+        public string GetAdminTitle(MessageViewModel message, long userId, out ChatMemberRank rank)
         {
-            var chat = Chat;
-            if (chat == null)
+            if (_admins.TryGetValue(message.ChatId, out Dictionary<long, ChatMemberTag> value))
             {
-                return string.Empty;
-            }
-
-            if (_admins.TryGetValue(chat.Id, out IDictionary<long, ChatAdministrator> value))
-            {
-                if (value.TryGetValue(userId, out ChatAdministrator admin))
+                if (value.TryGetValue(userId, out ChatMemberTag tag))
                 {
-                    if (string.IsNullOrEmpty(admin.CustomTitle))
+                    rank = tag.Rank;
+
+                    if (string.IsNullOrEmpty(tag.Tag))
                     {
-                        if (admin.IsOwner)
+                        if (tag.Rank == ChatMemberRank.Owner)
                         {
-                            return Strings.ChannelCreator;
+                            return Strings.ChatTagOwner;
                         }
 
-                        return Strings.ChannelAdmin;
+                        return Strings.ChatTagAdmin;
                     }
 
-                    return admin.CustomTitle;
+                    return tag.Tag;
                 }
             }
 
-            return string.Empty;
+            rank = ChatMemberRank.Other;
+            return message.SenderTag;
         }
 
         public bool IsAdministrator(MessageSender memberId)
@@ -234,23 +243,52 @@ namespace Telegram.ViewModels
                 return false;
             }
 
-            if (_admins.TryGetValue(chat.Id, out IDictionary<long, ChatAdministrator> value))
+            if (_admins.TryGetValue(chat.Id, out Dictionary<long, ChatMemberTag> value))
             {
-                return value.ContainsKey(user.UserId);
+                if (value.TryGetValue(user.UserId, out var tag))
+                {
+                    return tag.Rank != ChatMemberRank.Owner;
+                }
             }
 
             return false;
         }
 
-        public void UpdateAdministrators(long chatId)
+        public void UpdateAdministrators(Chat chat)
         {
-            ClientService.Send(new GetChatAdministrators(chatId), result =>
+            if (ClientService.TryGetBasicGroupFull(chat, out BasicGroupFullInfo fullInfo))
             {
-                if (result is ChatAdministrators users)
+                var members = new Dictionary<long, ChatMemberTag>();
+
+                foreach (var member in fullInfo.Members)
                 {
-                    _admins[chatId] = users.Administrators.ToDictionary(x => x.UserId);
+                    if (member.MemberId is not MessageSenderUser senderUser)
+                    {
+                        continue;
+                    }
+
+                    var type = member.Status switch
+                    {
+                        ChatMemberStatusCreator => ChatMemberRank.Owner,
+                        ChatMemberStatusAdministrator => ChatMemberRank.Admin,
+                        _ => ChatMemberRank.Other
+                    };
+
+                    members[senderUser.UserId] = new ChatMemberTag(type, member.Tag);
                 }
-            });
+
+                _admins[chat.Id] = members;
+            }
+            else if (chat.Type is ChatTypeSupergroup { IsChannel: false })
+            {
+                ClientService.Send(new GetChatAdministrators(chat.Id), result =>
+                {
+                    if (result is ChatAdministrators users)
+                    {
+                        _admins[chat.Id] = users.Administrators.ToDictionary(x => x.UserId, y => new ChatMemberTag(y.IsOwner ? ChatMemberRank.Owner : ChatMemberRank.Admin, y.CustomTitle));
+                    }
+                });
+            }
         }
 
 
@@ -412,6 +450,11 @@ namespace Telegram.ViewModels
         /// <summary>
         /// Only available when created through DialogViewModel
         /// </summary>
+        public virtual void OpenPoll(MessageViewModel message) { }
+
+        /// <summary>
+        /// Only available when created through DialogViewModel
+        /// </summary>
         public virtual void OpenPaidMedia(MessageViewModel message, PaidMedia media, FrameworkElement target, double timestamp = 0) { }
 
         /// <summary>
@@ -556,6 +599,8 @@ namespace Telegram.ViewModels
         }
 
         public override void OpenMedia(MessageViewModel message, FrameworkElement target, double timestamp = 0) => _viewModel.OpenMedia(message, target, timestamp);
+
+        public override void OpenPoll(MessageViewModel message) => _viewModel.OpenPoll(message);
 
         public override void OpenPaidMedia(MessageViewModel message, PaidMedia media, FrameworkElement target, double timestamp = 0)
         {

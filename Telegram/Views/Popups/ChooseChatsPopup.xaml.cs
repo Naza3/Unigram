@@ -623,11 +623,12 @@ namespace Telegram.Views.Popups
 
     public partial class ChooseChatsConfigurationReplyToMessage : ChooseChatsConfiguration
     {
-        public ChooseChatsConfigurationReplyToMessage(MessageViewModel message, InputTextQuote quote = null, int checklistTaskId = 0)
+        public ChooseChatsConfigurationReplyToMessage(MessageViewModel message, InputTextQuote quote = null, int checklistTaskId = 0, string pollOptionId = "")
         {
             Message = message;
             Quote = quote;
             ChecklistTaskId = checklistTaskId;
+            PollOptionId = pollOptionId;
         }
 
         public MessageViewModel Message { get; }
@@ -635,6 +636,8 @@ namespace Telegram.Views.Popups
         public InputTextQuote Quote { get; }
 
         public int ChecklistTaskId { get; }
+
+        public string PollOptionId { get; }
     }
 
     public partial class ChooseChatsConfigurationInviteToChat : ChooseChatsConfiguration
@@ -912,10 +915,9 @@ namespace Telegram.Views.Popups
 
     public partial class ChooseChatsConfigurationRequestUsers : ChooseChatsConfiguration
     {
-        public ChooseChatsConfigurationRequestUsers(long chatId, long messageId, KeyboardButtonTypeRequestUsers requestUsers)
+        public ChooseChatsConfigurationRequestUsers(KeyboardButtonSource source, KeyboardButtonTypeRequestUsers requestUsers)
         {
-            ChatId = chatId;
-            MessageId = messageId;
+            Source = source;
 
             MaxQuantity = requestUsers.MaxQuantity;
             UserIsPremium = requestUsers.UserIsPremium;
@@ -925,9 +927,7 @@ namespace Telegram.Views.Popups
             Id = requestUsers.Id;
         }
 
-        public long ChatId { get; }
-
-        public long MessageId { get; }
+        public KeyboardButtonSource Source { get; }
 
         /// <summary>
         /// The maximum number of users to share.

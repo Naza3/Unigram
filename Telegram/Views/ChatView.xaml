@@ -588,6 +588,10 @@
             <service:MessageUpgradedGiftPurchaseOfferContent />
         </DataTemplate>
 
+        <DataTemplate x:Name="ServiceMessageChatHasProtectedContentDisableRequestedTemplate">
+            <service:MessageChatHasProtectedContentDisableRequestedContent />
+        </DataTemplate>
+
         <DataTemplate x:Name="ServiceMessageUpgradedGiftTemplate">
             <messages:MessageService Click="ServiceMessage_Click">
                 <Button.Template>
@@ -1747,6 +1751,8 @@
                                          ReadMentions="{x:Bind ViewModel.ReadMentions}"
                                          NextReaction="{x:Bind ViewModel.Reactions.NextMessage}"
                                          ReadReactions="{x:Bind ViewModel.ReadReactions}"
+                                         NextPollVote="{x:Bind ViewModel.PollVotes.NextMessage}"
+                                         ReadPollVotes="{x:Bind ViewModel.ReadPollVotes}"
                                          ReadMessages="{x:Bind ViewModel.ReadMessages}"
                                          NextMessage="{x:Bind ViewModel.PreviousSlice}"
                                          HorizontalAlignment="Right"
@@ -1954,7 +1960,8 @@
                                                    MaxHeight="192"
                                                    TextChanging="TextField_TextChanging"
                                                    Capture="TextField_Tapped"
-                                                   Sending="TextField_Sending" />
+                                                   Sending="TextField_Sending"
+                                                   SizeChanged="TextField_SizeChanged" />
                             </Border>
                             <Border x:Name="btnAttach"
                                     Grid.Column="1"
@@ -2179,6 +2186,14 @@
                                                        Width="28"
                                                        Height="28" />
                                 </Grid>
+
+                                <!--<controls:GlyphButton x:Name="ButtonEditor"
+                                                      Click="ButtonEditor_Click"
+                                                      Glyph="&#xEACE;"
+                                                      VerticalAlignment="Top"
+                                                      Height="48"
+                                                      Visibility="Collapsed"
+                                                      Grid.Column="2" />-->
                             </Grid>
                         </Grid>
                     </Grid>

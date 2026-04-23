@@ -87,6 +87,7 @@ namespace Telegram.ViewModels.Supergroups
                 }
 
                 Member = member;
+                CustomTitle = member.Tag;
 
                 if (member.Status is ChatMemberStatusAdministrator administrator)
                 {
@@ -96,6 +97,7 @@ namespace Telegram.ViewModels.Supergroups
                     CanInviteUsers = administrator.Rights.CanInviteUsers;
                     CanManageDirectMessages = administrator.Rights.CanManageDirectMessages;
                     CanPinMessages = administrator.Rights.CanPinMessages;
+                    CanManageTags = administrator.Rights.CanManageTags;
                     CanPostMessages = administrator.Rights.CanPostMessages;
                     CanPostStories = administrator.Rights.CanPostStories;
                     CanEditStories = administrator.Rights.CanEditStories;
@@ -105,8 +107,6 @@ namespace Telegram.ViewModels.Supergroups
                     CanManageTopics = administrator.Rights.CanManageTopics;
                     CanManageVideoChats = administrator.Rights.CanManageVideoChats;
                     IsAnonymous = administrator.Rights.IsAnonymous;
-
-                    CustomTitle = administrator.CustomTitle;
                 }
                 else
                 {
@@ -116,6 +116,7 @@ namespace Telegram.ViewModels.Supergroups
                     CanInviteUsers = true;
                     CanManageDirectMessages = true;
                     CanPinMessages = true;
+                    CanManageTags = true;
                     CanPostMessages = true;
                     CanPostStories = true;
                     CanEditStories = true;
@@ -128,14 +129,10 @@ namespace Telegram.ViewModels.Supergroups
                     if (member.Status is ChatMemberStatusCreator creator)
                     {
                         IsAnonymous = creator.IsAnonymous;
-
-                        CustomTitle = creator.CustomTitle;
                     }
                     else
                     {
                         IsAnonymous = false;
-
-                        CustomTitle = string.Empty;
                     }
                 }
 
@@ -185,6 +182,7 @@ namespace Telegram.ViewModels.Supergroups
                     _canPromoteMembers &&
                     (!supergroup.IsChannel || _canEditMessages) &&
                     (supergroup.IsChannel || _canPinMessages) &&
+                    (supergroup.IsChannel || _canManageTags) &&
                     (!supergroup.IsChannel || _canPostMessages) &&
                     (!supergroup.IsChannel || _canManageDirectMessages) &&
                     _canPostStories &&
@@ -460,6 +458,19 @@ namespace Telegram.ViewModels.Supergroups
             }
         }
 
+        private bool _canManageTags;
+        public bool CanManageTags
+        {
+            get => _canManageTags;
+            set
+            {
+                if (Set(ref _canManageTags, value))
+                {
+                    RaisePropertyChanged(nameof(CanTransferOwnership));
+                }
+            }
+        }
+
         private bool _canManageVideoChats;
         public bool CanManageVideoChats
         {
@@ -546,7 +557,7 @@ namespace Telegram.ViewModels.Supergroups
             ChatMemberStatus status;
             if (member.Status is ChatMemberStatusCreator creator)
             {
-                status = new ChatMemberStatusCreator(_customTitle ?? string.Empty, !channel && _isAnonymous, creator.IsMember);
+                status = new ChatMemberStatusCreator(!channel && _isAnonymous, creator.IsMember);
             }
             else
             {
@@ -561,6 +572,7 @@ namespace Telegram.ViewModels.Supergroups
                         CanInviteUsers = _canInviteUsers,
                         CanManageDirectMessages = channel && _canManageDirectMessages,
                         CanPinMessages = !channel && _canPinMessages,
+                        CanManageTags = !channel && _canManageTags,
                         CanPostMessages = channel && _canPostMessages,
                         CanPostStories = _canPostStories,
                         CanEditStories = _canEditStories,
@@ -570,7 +582,6 @@ namespace Telegram.ViewModels.Supergroups
                         CanManageVideoChats = !channel && _canManageVideoChats,
                         CanManageTopics = _isForum && _canManageTopics,
                     },
-                    CustomTitle = _customTitle ?? string.Empty,
                     CanBeEdited = true
                 };
             }
@@ -599,6 +610,7 @@ namespace Telegram.ViewModels.Supergroups
                         && !administrator.Rights.CanDeleteMessages
                         && !administrator.Rights.CanInviteUsers
                         && !administrator.Rights.CanPinMessages
+                        && !administrator.Rights.CanManageTags
                         && !administrator.Rights.CanPostStories
                         && !administrator.Rights.CanEditStories
                         && !administrator.Rights.CanDeleteStories
@@ -617,7 +629,17 @@ namespace Telegram.ViewModels.Supergroups
             var response = await ClientService.SendAsync(new SetChatMemberStatus(chat.Id, member.MemberId, status));
             if (response is Ok)
             {
-                Aggregator.Publish(new UpdateChatMember(chat.Id, 0, 0, null, false, false, Member, new ChatMember(member.MemberId, ClientService.Options.MyId, member.JoinedChatDate, status)));
+                if (member.MemberId is MessageSenderUser user && !string.Equals(_customTitle, member.Tag))
+                {
+                    var tag = await ClientService.SendAsync(new SetChatMemberTag(chat.Id, user.UserId, _customTitle ?? string.Empty));
+                    if (tag is Error error)
+                    {
+                        ShowToast(error);
+                        return;
+                    }
+                }
+
+                Aggregator.Publish(new UpdateChatMember(chat.Id, 0, 0, null, false, false, Member, new ChatMember(member.MemberId, _customTitle ?? string.Empty, ClientService.Options.MyId, member.JoinedChatDate, status)));
                 Delegate?.Hide();
             }
             else if (response is Error error)
@@ -726,7 +748,7 @@ namespace Telegram.ViewModels.Supergroups
             var response = await ClientService.SendAsync(new SetChatMemberStatus(chat.Id, member.MemberId, new ChatMemberStatusMember()));
             if (response is Ok)
             {
-                Aggregator.Publish(new UpdateChatMember(chat.Id, 0, 0, null, false, false, Member, new ChatMember(member.MemberId, ClientService.Options.MyId, member.JoinedChatDate, new ChatMemberStatusMember())));
+                Aggregator.Publish(new UpdateChatMember(chat.Id, 0, 0, null, false, false, Member, new ChatMember(member.MemberId, member.Tag, ClientService.Options.MyId, member.JoinedChatDate, new ChatMemberStatusMember())));
                 Delegate?.Hide();
             }
             else if (response is Error error)

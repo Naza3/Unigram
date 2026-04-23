@@ -652,6 +652,8 @@ namespace Telegram.Controls.Messages
                 MessageChatSetTheme chatSetTheme => UpdateChatSetTheme(message, chatSetTheme, history),
                 MessageChatDeleteMember chatDeleteMember => UpdateChatDeleteMember(message, chatDeleteMember, history),
                 MessageChatDeletePhoto chatDeletePhoto => UpdateChatDeletePhoto(message, chatDeletePhoto, history),
+                MessageChatHasProtectedContentToggled chatHasProtectedContentToggled => UpdateChatHasProtectedContentToggled(message, chatHasProtectedContentToggled, history),
+                MessageChatHasProtectedContentDisableRequested chatHasProtectedContentDisableRequested => UpdateChatHasProtectedContentDisableRequested(message, chatHasProtectedContentDisableRequested, history),
                 MessageChatJoinByLink chatJoinByLink => UpdateChatJoinByLink(message, chatJoinByLink, history),
                 MessageChatJoinByRequest chatJoinByRequest => UpdateChatJoinByRequest(message, chatJoinByRequest, history),
                 MessageChatSetBackground chatSetBackground => UpdateChatSetBackground(message, chatSetBackground, history),
@@ -701,6 +703,8 @@ namespace Telegram.Controls.Messages
                 MessageChatBoost chatBoost => UpdateChatBoost(message, chatBoost, history),
                 MessageChecklistTasksAdded checklistTasksAdded => UpdateChecklistTasksAdded(message, checklistTasksAdded, history),
                 MessageChecklistTasksDone checklistTasksDone => UpdateChecklistTasksDone(message, checklistTasksDone, history),
+                MessagePollOptionAdded pollOptionAdded => UpdatePollOptionAdded(message, pollOptionAdded, history),
+                MessagePollOptionDeleted pollOptionDeleted => UpdatePollOptionDeleted(message, pollOptionDeleted, history),
                 MessageSuggestedPostPaid suggestedPostPaid => UpdateSuggestedPostPaid(message, suggestedPostPaid, history),
                 MessageSuggestedPostRefunded suggestedPostRefunded => UpdateSuggestedPostRefunded(message, suggestedPostRefunded, history),
                 MessageAsyncStory story => UpdateStory(message, story, history),
@@ -746,6 +750,7 @@ namespace Telegram.Controls.Messages
                     ChatEventAccentColorChanged accentColorChanged => UpdateChatEventAccentColorChanged(message, accentColorChanged, history),
                     ChatEventProfileAccentColorChanged profileAccentColorChanged => UpdateChatEventProfileAccentColorChanged(message, profileAccentColorChanged, history),
                     ChatEventEmojiStatusChanged emojiStatusChanged => UpdateChatEventEmojiStatusChanged(message, emojiStatusChanged, history),
+                    ChatEventMemberTagChanged memberTagChanged => UpdateChatEventMemberTagChanged(message, memberTagChanged, history),
                     ChatEventBackgroundChanged backgroundChanged => UpdateChatEventBackgroundChanged(message, backgroundChanged, history),
                     //ChatEventActiveUsernamesChanged activeUsernamesChanged => UpdateChatEventActiveUsernames(messageUsernamesChanged),
                     _ => _emptyString
@@ -905,6 +910,31 @@ namespace Telegram.Controls.Messages
             //}
 
             //return new FormattedText(content, entities);
+        }
+
+        private static FormattedText UpdateChatEventMemberTagChanged(MessageWithOwner message, ChatEventMemberTagChanged memberTagChanged, bool history)
+        {
+            var newValue = !string.IsNullOrEmpty(memberTagChanged.NewTag);
+            var oldValue = !string.IsNullOrEmpty(memberTagChanged.OldTag);
+
+            var outgoing = message.SenderId.IsUser(memberTagChanged.UserId);
+
+            if (newValue && oldValue)
+            {
+                return outgoing
+                    ? FormattedText.Format(ReplaceWithLink(Strings.EventLogRankSelfEdit, message.GetSender()), memberTagChanged.OldTag, memberTagChanged.NewTag)
+                    : FormattedText.Format(ReplaceWithLink(Strings.EventLogRankEdit, message.GetSender(), message.ClientService.GetUser(memberTagChanged.UserId)), memberTagChanged.OldTag, memberTagChanged.NewTag);
+            }
+            else if (newValue && !oldValue)
+            {
+                return outgoing
+                    ? FormattedText.Format(ReplaceWithLink(Strings.EventLogRankSelfAdd, message.GetSender()), memberTagChanged.NewTag)
+                    : FormattedText.Format(ReplaceWithLink(Strings.EventLogRankAdd, message.GetSender(), message.ClientService.GetUser(memberTagChanged.UserId)), memberTagChanged.NewTag);
+            }
+
+            return outgoing
+                ? FormattedText.Format(ReplaceWithLink(Strings.EventLogRankSelfRemove, message.GetSender()), memberTagChanged.OldTag)
+                : FormattedText.Format(ReplaceWithLink(Strings.EventLogRankRemove, message.GetSender(), message.ClientService.GetUser(memberTagChanged.UserId)), memberTagChanged.OldTag);
         }
 
         private static FormattedText UpdateChatEventBackgroundChanged(MessageWithOwner message, ChatEventBackgroundChanged backgroundChanged, bool history)
@@ -1621,6 +1651,33 @@ namespace Telegram.Controls.Messages
             {
                 return ReplaceWithLink(Strings.ActionRemovedPhoto, message.GetSender());
             }
+        }
+
+
+        private static FormattedText UpdateChatHasProtectedContentToggled(MessageWithOwner message, MessageChatHasProtectedContentToggled chatHasProtectedContentToggled, bool history)
+        {
+            if (chatHasProtectedContentToggled.NewHasProtectedContent == chatHasProtectedContentToggled.OldHasProtectedContent)
+            {
+                return chatHasProtectedContentToggled.NewHasProtectedContent
+                    ? Strings.DisableSharingActionStillDisabled.AsFormattedText()
+                    : Strings.DisableSharingActionStillEnabled.AsFormattedText();
+            }
+
+            if (message.IsOutgoing)
+            {
+                return chatHasProtectedContentToggled.NewHasProtectedContent
+                    ? Strings.DisableSharingActionYou.AsFormattedText()
+                    : Strings.EnableSharingActionYou.AsFormattedText();
+            }
+
+            return ReplaceWithName(chatHasProtectedContentToggled.NewHasProtectedContent ? Strings.DisableSharingActionOther : Strings.EnableSharingActionOther, message.GetSender());
+        }
+
+        private static FormattedText UpdateChatHasProtectedContentDisableRequested(MessageWithOwner message, MessageChatHasProtectedContentDisableRequested chatHasProtectedContentDisableRequested, bool history)
+        {
+            return message.IsOutgoing
+                ? Strings.SharingOfferEnableHeaderYou.AsFormattedText()
+                : ClientEx.ParseMarkdown(ReplaceWithName(Strings.SharingOfferEnableHeaderOther, message.GetSender()));
         }
 
         private static FormattedText UpdateChatJoinByLink(MessageWithOwner message, MessageChatJoinByLink chatJoinByLink, bool history)
@@ -2765,6 +2822,41 @@ namespace Telegram.Controls.Messages
                 return ReplaceWithLink(formatted, message.GetSender());
             }
         }
+        private static FormattedText UpdatePollOptionAdded(MessageWithOwner message, MessagePollOptionAdded pollOptionAdded, bool history)
+        {
+            FormattedText formatted;
+            var text = message.IsOutgoing
+                ? Strings.PollAddingActionYou
+                : Strings.PollAddingActionOther;
+            formatted = ClientEx.Format(text, pollOptionAdded.Text);
+            formatted = ClientEx.ParseMarkdown(formatted);
+            //formatted = TdExtensions.Concat(ClientEx.CustomEmoji("\uEAD2 "), formatted);
+
+            if (message.IsOutgoing)
+            {
+                return formatted;
+            }
+
+            return ReplaceWithLink(formatted, message.GetSender());
+        }
+
+        private static FormattedText UpdatePollOptionDeleted(MessageWithOwner message, MessagePollOptionDeleted pollOptionDeleted, bool history)
+        {
+            FormattedText formatted;
+            var text = message.IsOutgoing
+                ? Strings.PollRemovedActionYou
+                : Strings.PollRemovedActionOther;
+            formatted = ClientEx.Format(text, pollOptionDeleted.Text);
+            formatted = ClientEx.ParseMarkdown(formatted);
+            //formatted = TdExtensions.Concat(ClientEx.CustomEmoji("\uEAD2 "), formatted);
+
+            if (message.IsOutgoing)
+            {
+                return formatted;
+            }
+
+            return ReplaceWithLink(formatted, message.GetSender());
+        }
 
         private static FormattedText UpdateSuggestedPostPaid(MessageWithOwner message, MessageSuggestedPostPaid suggestedPostPaid, bool history)
         {
@@ -2985,6 +3077,48 @@ namespace Telegram.Controls.Messages
             }
 
             return source;
+        }
+
+        public static FormattedText ReplaceWithName(string source, params object[] args)
+        {
+            for (int i = 0; i < args.Length; i++)
+            {
+                var obj = args[i];
+                if (obj is User user)
+                {
+                    args[i] = user.FullName();
+                }
+                else if (obj is Chat chat)
+                {
+                    args[i] = chat.Title;
+                }
+                else if (obj is Game game)
+                {
+                    args[i] = game.Title;
+                }
+                else if (obj is MessageGift gift)
+                {
+                    args[i] = Locale.Declension(Strings.R.StarsCount, gift.Gift.StarCount + gift.PrepaidUpgradeStarCount);
+                }
+                else if (obj is MessageGiftedPremium giftedPremium)
+                {
+                    args[i] = Locale.FormatCurrency(giftedPremium.Amount, giftedPremium.Currency);
+                }
+                else if (obj is MessagePremiumGiftCode premiumGiftCode)
+                {
+                    args[i] = Locale.FormatCurrency(premiumGiftCode.Amount, premiumGiftCode.Currency);
+                }
+                else if (obj is MessageGiftedStars giftedStars)
+                {
+                    args[i] = Locale.FormatCurrency(giftedStars.Amount, giftedStars.Currency);
+                }
+                else if (obj is ForumTopicInfo forumTopicInfo)
+                {
+                    args[i] = $"\U0001F4C3 {forumTopicInfo.Name}";
+                }
+            }
+
+            return string.Format(source, args).AsFormattedText();
         }
 
         private static FormattedText ReplaceWithLinks(string source, string param, IEnumerable<long> uids, IClientService clientService)

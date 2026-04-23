@@ -15,7 +15,7 @@ using Telegram.Views.Supergroups.Popups;
 
 namespace Telegram.ViewModels.Supergroups
 {
-    public partial class SupergroupMembersViewModel : SupergroupMembersViewModelBase, IDelegable<ISupergroupDelegate>, IHandle
+    public partial class SupergroupMembersViewModel : SupergroupMembersViewModelBase, IDelegable<ISupergroupMembersDelegate>, IHandle
     {
         public SupergroupMembersViewModel(IClientService clientService, ISettingsService settingsService, IEventAggregator aggregator)
             : base(clientService, settingsService, aggregator, new SupergroupMembersFilterRecent(), query => new SupergroupMembersFilterSearch(query))
@@ -36,7 +36,10 @@ namespace Telegram.ViewModels.Supergroups
                 {
                     if (update.NewChatMember.Status is ChatMemberStatusMember or ChatMemberStatusAdministrator or ChatMemberStatusCreator or ChatMemberStatusRestricted)
                     {
+                        item.Tag = update.NewChatMember.Tag;
                         item.Status = update.NewChatMember.Status;
+
+                        Delegate?.UpdateMember(item);
                     }
                     else
                     {
@@ -78,6 +81,47 @@ namespace Telegram.ViewModels.Supergroups
                     Set(ref _hasHiddenMembers, false, nameof(HasHiddenMembers));
                 }
             }
+        }
+
+        private bool _canEditTags;
+        public bool CanEditTags
+        {
+            get => _canEditTags;
+            set => SetEditTags(value);
+        }
+
+        public void UpdateEditTags(bool value)
+        {
+            Set(ref _canEditTags, value, nameof(CanEditTags));
+        }
+
+        private void SetEditTags(bool value)
+        {
+            if (_canEditTags == value)
+            {
+                return;
+            }
+
+            var permissions = new ChatPermissions
+            {
+                CanChangeInfo = Chat.Permissions.CanChangeInfo,
+                CanPinMessages = Chat.Permissions.CanPinMessages,
+                CanInviteUsers = Chat.Permissions.CanInviteUsers,
+                CanSendPhotos = Chat.Permissions.CanSendPhotos,
+                CanSendVideos = Chat.Permissions.CanSendVideos,
+                CanSendOtherMessages = Chat.Permissions.CanSendOtherMessages,
+                CanSendAudios = Chat.Permissions.CanSendAudios,
+                CanSendDocuments = Chat.Permissions.CanSendDocuments,
+                CanSendVoiceNotes = Chat.Permissions.CanSendVoiceNotes,
+                CanSendVideoNotes = Chat.Permissions.CanSendVideoNotes,
+                CanSendPolls = Chat.Permissions.CanSendPolls,
+                CanAddLinkPreviews = Chat.Permissions.CanAddLinkPreviews,
+                CanSendBasicMessages = Chat.Permissions.CanSendBasicMessages,
+                CanEditTag = value,
+            };
+
+            Set(ref _canEditTags, value, nameof(CanEditTags));
+            ClientService.Send(new SetChatPermissions(Chat.Id, permissions));
         }
 
         public void Add()
@@ -135,6 +179,11 @@ namespace Telegram.ViewModels.Supergroups
             {
                 Members.Source.Insert(Math.Min(Members.Source.Count, index), member);
             }
+        }
+
+        public void EditTag(ChatMember member)
+        {
+            ShowPopup(new MemberTagEditPopup(ClientService, Aggregator, Chat, member));
         }
 
         #endregion

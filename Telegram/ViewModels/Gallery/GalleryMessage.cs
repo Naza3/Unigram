@@ -22,7 +22,7 @@ namespace Telegram.ViewModels.Gallery
             : base(clientService)
         {
             // Create a copy so that content doesn't get updated while the gallery is open
-            _message = new(message.Id, message.SenderId, message.ChatId, message.SendingState, message.SchedulingState, message.IsOutgoing, message.IsPinned, message.IsFromOffline, message.CanBeSaved, message.HasTimestampedMedia, message.IsChannelPost, message.IsPaidStarSuggestedPost, message.IsPaidTonSuggestedPost, message.ContainsUnreadMention, message.Date, message.EditDate, message.ForwardInfo, message.ImportInfo, message.InteractionInfo, message.UnreadReactions, message.FactCheck, message.SuggestedPostInfo, message.ReplyTo, message.TopicId, message.SelfDestructType, message.SelfDestructIn, message.AutoDeleteIn, message.ViaBotUserId, message.SenderBusinessBotUserId, message.SenderBoostCount, message.PaidMessageStarCount, message.AuthorSignature, message.MediaAlbumId, message.EffectId, message.RestrictionInfo, message.SummaryLanguageCode, message.Content, message.ReplyMarkup);
+            _message = new(message.Id, message.SenderId, message.ChatId, message.SendingState, message.SchedulingState, message.IsOutgoing, message.IsPinned, message.IsFromOffline, message.CanBeSaved, message.HasTimestampedMedia, message.IsChannelPost, message.IsPaidStarSuggestedPost, message.IsPaidTonSuggestedPost, message.ContainsUnreadMention, message.Date, message.EditDate, message.ForwardInfo, message.ImportInfo, message.InteractionInfo, message.UnreadReactions, message.FactCheck, message.SuggestedPostInfo, message.ReplyTo, message.TopicId, message.SelfDestructType, message.SelfDestructIn, message.AutoDeleteIn, message.ViaBotUserId, message.SenderBusinessBotUserId, message.SenderBoostCount, message.SenderTag, message.PaidMessageStarCount, message.AuthorSignature, message.MediaAlbumId, message.EffectId, message.RestrictionInfo, message.SummaryLanguageCode, message.Content, message.ReplyMarkup);
             _properties = properties;
 
             if (clientService.TryGetChat(message.ChatId, out Chat chat))
@@ -159,7 +159,7 @@ namespace Telegram.ViewModels.Gallery
                 }
                 else if (_message.Content is MessageText text)
                 {
-                    return text.LinkPreview?.Type is LinkPreviewTypeVideo or LinkPreviewTypeAnimation or LinkPreviewTypeVideoNote;
+                    return text.LinkPreview?.Type is LinkPreviewTypeVideo or LinkPreviewTypeAnimation or LinkPreviewTypeVideoNote or LinkPreviewTypeEmbeddedAnimationPlayer { Animation: not null } or LinkPreviewTypeEmbeddedVideoPlayer { Video: not null };
                 }
                 else if (_message.Content is MessageSponsored sponsored)
                 {
@@ -184,8 +184,7 @@ namespace Telegram.ViewModels.Gallery
                 }
                 else if (_message.Content is MessageText text)
                 {
-                    return text.LinkPreview?.Type is LinkPreviewTypeAnimation
-                        || text.LinkPreview?.Type is LinkPreviewTypeVideoNote;
+                    return text.LinkPreview?.Type is LinkPreviewTypeAnimation or LinkPreviewTypeVideoNote or LinkPreviewTypeEmbeddedAnimationPlayer { Animation: not null };
                 }
 
                 return false;
@@ -277,6 +276,8 @@ namespace Telegram.ViewModels.Gallery
                         LinkPreviewTypeVideo previewVideo => previewVideo.Video.Duration,
                         LinkPreviewTypeAnimation previewAnimation => previewAnimation.Animation.Duration,
                         LinkPreviewTypeVideoNote previewVideoNote => previewVideoNote.VideoNote.Duration,
+                        LinkPreviewTypeEmbeddedAnimationPlayer embeddedAnimationPlayer => embeddedAnimationPlayer.Animation?.Duration ?? 0,
+                        LinkPreviewTypeEmbeddedVideoPlayer embeddedVideoPlayer => embeddedVideoPlayer.Video?.Duration ?? 0,
                         _ => 0
                     };
                 }

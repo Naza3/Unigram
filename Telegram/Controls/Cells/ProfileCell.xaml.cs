@@ -87,12 +87,12 @@ namespace Telegram.Controls.Cells
                 _clientService = null;
                 _chat = null;
             }
-            else if (_member != null)
+            else if (_pollVoter != null)
             {
-                UpdateMessageSender(_clientService, _member);
+                UpdatePollVoter(_clientService, _pollVoter);
 
                 _clientService = null;
-                _member = null;
+                _pollVoter = null;
             }
             else if (_element != null)
             {
@@ -471,6 +471,20 @@ namespace Telegram.Controls.Cells
             args.Handled = true;
         }
 
+        public void UpdateSupergroupMember(IClientService clientService, ChatMember member)
+        {
+            var user = clientService.GetMessageSender(member.MemberId) as User;
+            if (user == null)
+            {
+                return;
+            }
+
+            TitleLabel.Text = user.FullName();
+            SubtitleLabel.Text = ChannelParticipantToTypeConverter.Convert(clientService, member);
+            Photo.Source = ProfilePictureSource.User(clientService, user);
+            Identity.SetStatus(clientService, user, BotVerified);
+        }
+
         public void UpdateSupergroupAdminFilter(IClientService clientService, ContainerContentChangingEventArgs args, TypedEventHandler<ListViewBase, ContainerContentChangingEventArgs> callback)
         {
             UpdateStyleNoSubtitle();
@@ -549,6 +563,32 @@ namespace Telegram.Controls.Cells
             }
 
             args.Handled = true;
+        }
+
+        public void UpdateSupergroupBanned(IClientService clientService, ChatMember member)
+        {
+            var messageSender = clientService.GetMessageSender(member.MemberId);
+            if (messageSender == null)
+            {
+                return;
+            }
+
+            if (messageSender is User user)
+            {
+                TitleLabel.Text = user.FullName();
+
+                Photo.Source = ProfilePictureSource.User(clientService, user);
+                Identity.SetStatus(clientService, user, BotVerified);
+            }
+            else if (messageSender is Chat chat)
+            {
+                TitleLabel.Text = chat.Title;
+
+                Photo.Source = ProfilePictureSource.Chat(clientService, chat);
+                Identity.SetStatus(clientService, chat, BotVerified);
+            }
+
+            SubtitleLabel.Text = ChannelParticipantToTypeConverter.Convert(clientService, member);
         }
 
         public void UpdateBoostSlot(IClientService clientService, ContainerContentChangingEventArgs args, TypedEventHandler<ListViewBase, ContainerContentChangingEventArgs> callback)
@@ -819,20 +859,37 @@ namespace Telegram.Controls.Cells
             {
                 SubtitleLabel.Text = LastSeenConverter.GetLabel(user, false);
 
-                if (member.Status is ChatMemberStatusAdministrator administrator)
+                var infoLabel = Content as BadgeControl;
+                var tag = member.GetTag();
+
+                if (string.IsNullOrEmpty(tag))
                 {
-                    var infoLabel = Content as TextBlock;
-                    infoLabel?.Text = string.IsNullOrEmpty(administrator.CustomTitle) ? Strings.ChannelAdmin : administrator.CustomTitle;
-                }
-                else if (member.Status is ChatMemberStatusCreator creator)
-                {
-                    var infoLabel = Content as TextBlock;
-                    infoLabel?.Text = string.IsNullOrEmpty(creator.CustomTitle) ? Strings.ChannelCreator : creator.CustomTitle;
+                    infoLabel?.Visibility = Visibility.Collapsed;
                 }
                 else
                 {
-                    var infoLabel = Content as TextBlock;
-                    infoLabel?.Text = string.Empty;
+                    infoLabel?.Visibility = Visibility.Visible;
+                    infoLabel?.Text = tag;
+                }
+
+                if (member.Status is ChatMemberStatusAdministrator)
+                {
+                    var color = Color.FromArgb(0xFF, 0x75, 0xC8, 0x73);
+
+                    infoLabel?.Background = new SolidColorBrush(color) { Opacity = 0.2 };
+                    infoLabel?.Foreground = new SolidColorBrush(color.Darken());
+                }
+                else if (member.Status is ChatMemberStatusCreator)
+                {
+                    var color = Color.FromArgb(0xFF, 0x65, 0x60, 0xF6);
+
+                    infoLabel?.Background = new SolidColorBrush(color) { Opacity = 0.2 };
+                    infoLabel?.Foreground = new SolidColorBrush(color.Darken());
+                }
+                else
+                {
+                    infoLabel?.ClearValue(BackgroundProperty);
+                    infoLabel?.ClearValue(ForegroundProperty);
                 }
             }
             else if (args.Phase == 2)
@@ -847,6 +904,55 @@ namespace Telegram.Controls.Cells
             }
 
             args.Handled = true;
+        }
+
+        public void UpdateChatSharedMembers(IClientService clientService, ChatMember member)
+        {
+            var user = clientService.GetMessageSender(member.MemberId) as User;
+            if (user == null)
+            {
+                return;
+            }
+
+            TitleLabel.Text = user.FullName();
+
+            SubtitleLabel.Text = LastSeenConverter.GetLabel(user, false);
+
+            var infoLabel = Content as BadgeControl;
+            var tag = member.GetTag();
+
+            if (string.IsNullOrEmpty(tag))
+            {
+                infoLabel?.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                infoLabel?.Visibility = Visibility.Visible;
+                infoLabel?.Text = tag;
+            }
+
+            if (member.Status is ChatMemberStatusAdministrator)
+            {
+                var color = Color.FromArgb(0xFF, 0x75, 0xC8, 0x73);
+
+                infoLabel?.Background = new SolidColorBrush(color) { Opacity = 0.2 };
+                infoLabel?.Foreground = new SolidColorBrush(color.Darken());
+            }
+            else if (member.Status is ChatMemberStatusCreator)
+            {
+                var color = Color.FromArgb(0xFF, 0x65, 0x60, 0xF6);
+
+                infoLabel?.Background = new SolidColorBrush(color) { Opacity = 0.2 };
+                infoLabel?.Foreground = new SolidColorBrush(color.Darken());
+            }
+            else
+            {
+                infoLabel?.ClearValue(BackgroundProperty);
+                infoLabel?.ClearValue(ForegroundProperty);
+            }
+
+            Photo.Source = ProfilePictureSource.User(clientService, user);
+            Identity.SetStatus(clientService, user, BotVerified);
         }
 
         public void UpdateNotificationException(IClientService clientService, ContainerContentChangingEventArgs args, TypedEventHandler<ListViewBase, ContainerContentChangingEventArgs> callback)
@@ -1084,20 +1190,20 @@ namespace Telegram.Controls.Cells
             args.Handled = true;
         }
 
-        private MessageSender _member;
+        private PollVoter _pollVoter;
 
-        public void UpdateMessageSender(IClientService clientService, MessageSender member)
+        public void UpdatePollVoter(IClientService clientService, PollVoter pollVoter)
         {
             if (!_templateApplied)
             {
                 _clientService = clientService;
-                _member = member;
+                _pollVoter = pollVoter;
                 return;
             }
 
             UpdateStyleNoSubtitle();
 
-            var messageSender = clientService.GetMessageSender(member);
+            var messageSender = clientService.GetMessageSender(pollVoter.VoterId);
             if (messageSender == null)
             {
                 return;
@@ -1116,6 +1222,28 @@ namespace Telegram.Controls.Cells
 
                 Photo.Source = ProfilePictureSource.Chat(clientService, chat);
                 Identity.SetStatus(clientService, chat, BotVerified);
+            }
+
+            if (Content is StackPanel panel)
+            {
+                var date = panel.Children[0] as TextBlock;
+                var time = panel.Children[1] as TextBlock;
+
+                var dateTime = Formatter.ToLocalTime(pollVoter.Date);
+                if (dateTime.Date == DateTime.Today)
+                {
+                    date.Text = Strings.ShortToday;
+                }
+                else if (dateTime.Date == DateTime.Today.AddDays(-1))
+                {
+                    date.Text = Strings.ShortYesterday;
+                }
+                else
+                {
+                    date.Text = Formatter.DateExtended(pollVoter.Date);
+                }
+
+                time.Text = Formatter.Time(dateTime);
             }
         }
 

@@ -30,6 +30,7 @@ namespace Telegram.ViewModels
                 .Subscribe<UpdateChatReplyMarkup>(Handle)
                 .Subscribe<UpdateChatUnreadMentionCount>(Handle)
                 .Subscribe<UpdateChatUnreadReactionCount>(Handle)
+                .Subscribe<UpdateChatUnreadPollVoteCount>(Handle)
                 .Subscribe<UpdateChatReadOutbox>(Handle)
                 .Subscribe<UpdateForumTopicReadOutbox>(Handle)
                 .Subscribe<UpdateChatReadInbox>(Handle)
@@ -482,15 +483,7 @@ namespace Telegram.ViewModels
         {
             if (update.ChatId == _chat?.Id)
             {
-                var response = await ClientService.SendAsync(new GetMessage(update.ChatId, update.ReplyMarkupMessageId));
-                if (response is Message message)
-                {
-                    BeginOnUIThread(() => Delegate?.UpdateChatReplyMarkup(_chat, CreateMessage(message)));
-                }
-                else
-                {
-                    BeginOnUIThread(() => Delegate?.UpdateChatReplyMarkup(_chat, null));
-                }
+                BeginOnUIThread(() => Delegate?.UpdateChatReplyMarkup(_chat, CreateMessage(update.ReplyMarkupMessage)));
             }
         }
 
@@ -507,6 +500,14 @@ namespace Telegram.ViewModels
             if (update.ChatId == _chat?.Id)
             {
                 BeginOnUIThread(() => Delegate?.UpdateChatUnreadReactionCount(_chat, update.UnreadReactionCount));
+            }
+        }
+
+        public void Handle(UpdateChatUnreadPollVoteCount update)
+        {
+            if (update.ChatId == _chat?.Id)
+            {
+                BeginOnUIThread(() => Delegate?.UpdateChatUnreadPollVoteCount(_chat, update.UnreadPollVoteCount));
             }
         }
 
@@ -796,7 +797,7 @@ namespace Telegram.ViewModels
             {
                 var topicId = new MessageTopicForum(update.ForumTopicId);
                 var content = new MessageText(update.Text, null, null);
-                var message = CreateMessage(new Message(long.MaxValue, new MessageSenderUser(user.Id), update.ChatId, null, null, false, false, false, false, false, false, false, false, false, DateTime.Now.ToTimestamp(), 0, null, null, null, null, null, null, null, topicId, null, 0, 0, 0, 0, 0, 0, string.Empty, 0, 0, null, string.Empty, content, null));
+                var message = CreateMessage(new Message(long.MaxValue, new MessageSenderUser(user.Id), update.ChatId, null, null, false, false, false, false, false, false, false, false, false, DateTime.Now.ToTimestamp(), 0, null, null, null, null, null, null, null, topicId, null, 0, 0, 0, 0, 0, string.Empty, 0, string.Empty, 0, 0, null, string.Empty, content, null));
                 message.GeneratedContentUnread = true;
                 message.IsInitial = false;
 

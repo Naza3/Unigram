@@ -31,6 +31,94 @@ namespace Telegram.Td.Api
 {
     public static class TdExtensions
     {
+        public static string ToUrl(this TextEntityTypeDateTime dateTime)
+        {
+            var url = $"tg-date://{dateTime.UnixTime}";
+
+            if (dateTime.FormattingType is DateTimeFormattingTypeRelative)
+            {
+                url += "?relative";
+            }
+            else if (dateTime.FormattingType is DateTimeFormattingTypeAbsolute absolute)
+            {
+                url += "?absolute";
+
+                if (absolute.TimePrecision is DateTimePartPrecisionShort)
+                {
+                    url += "&time=short";
+                }
+                else if (absolute.TimePrecision is DateTimePartPrecisionLong)
+                {
+                    url += "&time=long";
+                }
+
+                if (absolute.DatePrecision is DateTimePartPrecisionShort)
+                {
+                    url += "&date=short";
+                }
+                else if (absolute.DatePrecision is DateTimePartPrecisionLong)
+                {
+                    url += "&date=long";
+                }
+
+                if (absolute.ShowDayOfWeek)
+                {
+                    url += "&day_of_week";
+                }
+            }
+
+            return url;
+        }
+
+        public static bool TryParseDateTime(string url, out TextEntityTypeDateTime dateTime)
+        {
+            dateTime = null;
+
+            var split = url.Split('?');
+
+            var link = split[0];
+            if (link.StartsWith("tg-date://") && int.TryParse(link.Substring("tg-date://".Length), out int unixTime))
+            {
+                dateTime = new TextEntityTypeDateTime(unixTime, null);
+            }
+
+            if (dateTime != null && split.Length > 0)
+            {
+                var query = split[^1].ParseQueryString();
+                if (query.ContainsKey("relative"))
+                {
+                    dateTime.FormattingType = new DateTimeFormattingTypeRelative();
+                }
+                else if (query.ContainsKey("absolute"))
+                {
+                    var absolute = new DateTimeFormattingTypeAbsolute();
+
+                    query.TryGetValue("time", out string time);
+                    query.TryGetValue("date", out string date);
+
+                    absolute.TimePrecision = time?.ToLowerInvariant() switch
+                    {
+                        "short" => new DateTimePartPrecisionShort(),
+                        "long" => new DateTimePartPrecisionLong(),
+                        _ => new DateTimePartPrecisionNone()
+                    };
+
+                    absolute.DatePrecision = date?.ToLowerInvariant() switch
+                    {
+                        "short" => new DateTimePartPrecisionShort(),
+                        "long" => new DateTimePartPrecisionLong(),
+                        _ => new DateTimePartPrecisionNone()
+                    };
+
+                    absolute.ShowDayOfWeek = query.ContainsKey("day_of_week");
+
+                    dateTime.FormattingType = absolute;
+                }
+            }
+
+            return dateTime != null;
+        }
+
         public static bool ShowCaptionAboveMedia(this MessageViewModel message)
         {
             return message.Content switch
@@ -1456,6 +1544,7 @@ namespace Telegram.Td.Api
                 case TextEntityTypePreCode:
                 case TextEntityTypeTextUrl:
                 case TextEntityTypeMentionName:
+                case TextEntityTypeDateTime:
                     return true;
                 default:
                     return false;
@@ -1495,6 +1584,8 @@ namespace Telegram.Td.Api
                         LinkPreviewTypeWebApp webApp => webApp.Photo,
                         _ => null
                     };
+                case MessagePoll poll:
+                    return poll.Media?.GetPhoto();
                 case MessageChatChangePhoto chatChangePhoto:
                     return chatChangePhoto.Photo.ToPhoto();
                 default:
@@ -1581,6 +1672,8 @@ namespace Telegram.Td.Api
                     return (videoNote.VideoNote.Video, videoNote.VideoNote.Thumbnail, null);
                 case MessageVoiceNote voiceNote:
                     return (voiceNote.VoiceNote.Voice, null, null);
+                case MessagePoll poll:
+                    return poll.Media.GetFileAndThumbnailAndName();
             }
 
             return (null, null, null);
@@ -1749,9 +1842,9 @@ namespace Telegram.Td.Api
                         LinkPreviewTypeBackground background => background.Document?.DocumentValue,
                         LinkPreviewTypeDirectMessagesChat directMessagesChat => directMessagesChat.Photo?.GetFile(),
                         LinkPreviewTypeDocument document => document.Document.DocumentValue,
-                        LinkPreviewTypeEmbeddedAudioPlayer embeddedAudioPlayer => embeddedAudioPlayer.Thumbnail?.GetFile(),
-                        LinkPreviewTypeEmbeddedAnimationPlayer embeddedAnimationPlayer => embeddedAnimationPlayer.Thumbnail?.GetFile(),
-                        LinkPreviewTypeEmbeddedVideoPlayer embeddedVideoPlayer => embeddedVideoPlayer.Thumbnail?.GetFile(),
+                        LinkPreviewTypeEmbeddedAudioPlayer embeddedAudioPlayer => embeddedAudioPlayer.Audio?.AudioValue ?? embeddedAudioPlayer.Thumbnail?.GetFile(),
+                        LinkPreviewTypeEmbeddedAnimationPlayer embeddedAnimationPlayer => embeddedAnimationPlayer.Animation?.AnimationValue ?? embeddedAnimationPlayer.Thumbnail?.GetFile(),
+                        LinkPreviewTypeEmbeddedVideoPlayer embeddedVideoPlayer => embeddedVideoPlayer.Video?.VideoValue ?? embeddedVideoPlayer.Thumbnail?.GetFile(),
                         LinkPreviewTypeSticker sticker => sticker.Sticker.StickerValue,
                         LinkPreviewTypeVideo video => video.Video.VideoValue,
                         LinkPreviewTypeVideoNote videoNote => videoNote.VideoNote.Video,
@@ -1779,6 +1872,8 @@ namespace Telegram.Td.Api
                         PaidMediaVideo video => video.Video.VideoValue,
                         _ => invoice.ProductInfo.Photo?.GetFile()
                     };
+                case MessagePoll poll:
+                    return poll.Media?.GetFile();
                 case MessageSponsored sponsored:
                     return sponsored.Content switch
                     {
@@ -1811,6 +1906,10 @@ namespace Telegram.Td.Api
                         return game.Game.Animation.AnimationValue.Local.IsDownloadingCompleted;
                     }
                     return false;
+                case MessagePoll poll when poll.Media is MessageAnimation pollAnimation:
+                    return pollAnimation.Animation.AnimationValue.Local.IsDownloadingCompleted;
+                case MessagePoll poll when poll.Media is MessageVideo:
+                    return true;
                 case MessageText text:
                     if (text.LinkPreview?.Type is LinkPreviewTypeAnimation previewAnimation)
                     {
@@ -1823,6 +1922,11 @@ namespace Telegram.Td.Api
                     else if (text.LinkPreview?.Type is LinkPreviewTypeVideoNote previewVideoNote)
                     {
                         return previewVideoNote.VideoNote.Video.Local.IsDownloadingCompleted;
+                    }
+                    else if (text.LinkPreview?.Type is LinkPreviewTypeEmbeddedAnimationPlayer previewTypeEmbeddedAnimationPlayer)
+                    {
+                        return previewTypeEmbeddedAnimationPlayer.Animation != null &&
+                            previewTypeEmbeddedAnimationPlayer.Animation.AnimationValue.Local.IsDownloadingCompleted;
                     }
                     else if (text.LinkPreview?.Type is LinkPreviewTypeVideo)
                     {
@@ -1963,7 +2067,12 @@ namespace Telegram.Td.Api
 
         public static Thumbnail GetThumbnail(this Message message)
         {
-            return message.Content switch
+            return GetThumbnail(message.Content);
+        }
+
+        public static Thumbnail GetThumbnail(this MessageContent content)
+        {
+            return content switch
             {
                 MessageAnimation animation => animation.Animation.Thumbnail,
                 MessageAudio audio => audio.Audio.AlbumCoverThumbnail,
@@ -1974,6 +2083,7 @@ namespace Telegram.Td.Api
                 MessageText text => text.LinkPreview?.GetThumbnail(),
                 MessageVideo video => video.Video.Thumbnail,
                 MessageVideoNote videoNote => videoNote.VideoNote.Thumbnail,
+                MessagePoll poll => poll.Media?.GetThumbnail(),
                 MessageSponsored sponsored => sponsored.Content switch
                 {
                     MessageAnimation sponsoredAnimation => sponsoredAnimation.Animation.Thumbnail,
@@ -1987,7 +2097,12 @@ namespace Telegram.Td.Api
 
         public static Minithumbnail GetMinithumbnail(this Message message, bool secret = false)
         {
-            return message.Content switch
+            return GetMinithumbnail(message.Content);
+        }
+
+        public static Minithumbnail GetMinithumbnail(this MessageContent content, bool secret = false)
+        {
+            return content switch
             {
                 MessagePhoto photo => photo.IsSecret && !secret ? null : photo.Photo.Minithumbnail,
                 MessageAnimation animation => animation.IsSecret && !secret ? null : animation.Animation.Minithumbnail,
@@ -1997,6 +2112,7 @@ namespace Telegram.Td.Api
                 MessageText text => text.LinkPreview?.GetMinithumbnail(),
                 MessageVideo video => video.IsSecret && !secret ? null : (video.Cover?.Minithumbnail ?? video.Video.Minithumbnail),
                 MessageVideoNote videoNote => videoNote.IsSecret && !secret ? null : videoNote.VideoNote.Minithumbnail,
+                MessagePoll poll => poll.Media?.GetMinithumbnail(secret),
                 MessageSponsored sponsored => sponsored.Content switch
                 {
                     MessageAnimation sponsoredAnimation => sponsoredAnimation.Animation.Minithumbnail,
@@ -2209,6 +2325,9 @@ namespace Telegram.Td.Api
                 LinkPreviewTypeVideo or
                 LinkPreviewTypeVideoNote or
                 LinkPreviewTypeVoiceNote or
+                LinkPreviewTypeEmbeddedAnimationPlayer { Animation: not null } or
+                LinkPreviewTypeEmbeddedAudioPlayer { Audio: not null } or
+                LinkPreviewTypeEmbeddedVideoPlayer { Video: not null } or
                 LinkPreviewTypeStoryAlbum { VideoIcon: not null } || linkPreview.HasPhoto();
         }
 
@@ -3399,7 +3518,47 @@ namespace Telegram.Td.Api
         public static int Count(this ChatPermissions permissions)
         {
             var count = 0;
+            if (permissions.CanSendBasicMessages)
+            {
+                count++;
+            }
+            if (permissions.CanSendAudios)
+            {
+                count++;
+            }
+            if (permissions.CanSendDocuments)
+            {
+                count++;
+            }
+            if (permissions.CanSendPhotos)
+            {
+                count++;
+            }
+            if (permissions.CanSendVideos)
+            {
+                count++;
+            }
+            if (permissions.CanSendVideoNotes)
+            {
+                count++;
+            }
+            if (permissions.CanSendVoiceNotes)
+            {
+                count++;
+            }
+            if (permissions.CanSendPolls)
+            {
+                count++;
+            }
+            if (permissions.CanSendOtherMessages)
+            {
+                count++;
+            }
             if (permissions.CanAddLinkPreviews)
+            {
+                count++;
+            }
+            if (permissions.CanEditTag)
             {
                 count++;
             }
@@ -3415,49 +3574,17 @@ namespace Telegram.Td.Api
             {
                 count++;
             }
-            if (permissions.CanSendVoiceNotes)
-            {
-                count++;
-            }
-            if (permissions.CanSendVideoNotes)
-            {
-                count++;
-            }
-            if (permissions.CanSendVideos)
-            {
-                count++;
-            }
-            if (permissions.CanSendPhotos)
-            {
-                count++;
-            }
-            if (permissions.CanSendDocuments)
-            {
-                count++;
-            }
-            if (permissions.CanSendAudios)
-            {
-                count++;
-            }
-            if (permissions.CanSendBasicMessages)
-            {
-                count++;
-            }
-            if (permissions.CanSendOtherMessages)
-            {
-                count++;
-            }
-            if (permissions.CanSendPolls)
-            {
-                count++;
-            }
+            //if (permissions.CanCreateTopics)
+            //{
+            //    count++;
+            //}
 
             return count;
         }
 
         public static int Total(this ChatPermissions permissions)
         {
-            return 13;
+            return 14;
         }
 
         public static bool CanCreateTopics(this Chat chat, IClientService clientService)
@@ -3951,6 +4078,16 @@ namespace Telegram.Td.Api
             return supergroup.Status is ChatMemberStatusCreator or ChatMemberStatusAdministrator { Rights.CanRestrictMembers: true };
         }
 
+        public static bool CanRestrictMembers(this BasicGroup basicGroup)
+        {
+            if (basicGroup.Status == null)
+            {
+                return false;
+            }
+
+            return basicGroup.Status is ChatMemberStatusCreator or ChatMemberStatusAdministrator { Rights.CanRestrictMembers: true };
+        }
+
         public static bool CanPromoteMembers(this Supergroup supergroup)
         {
             if (supergroup.Status == null)
@@ -3969,6 +4106,50 @@ namespace Telegram.Td.Api
             }
 
             return basicGroup.Status is ChatMemberStatusCreator;
+        }
+
+        public static bool CanEditTag(this Supergroup supergroup, Chat chat, ChatMember member, long myId)
+        {
+            var can_manage_ranks = supergroup.Status is ChatMemberStatusCreator or ChatMemberStatusAdministrator { Rights.CanManageTags: true };
+            var can_edit_rank = supergroup.Status is ChatMemberStatusRestricted { Permissions.CanEditTag: true } || chat.Permissions.CanEditTag;
+
+            if (member.MemberId.IsUser(myId))
+            {
+                return can_manage_ranks || can_edit_rank;
+            }
+            else if (member.Status is ChatMemberStatusAdministrator administrator)
+            {
+                return administrator.CanBeEdited;
+            }
+
+            return can_manage_ranks;
+        }
+
+        public static bool CanEditTag(this BasicGroup basicGroup, Chat chat, ChatMember member, long myId)
+        {
+            var can_manage_ranks = basicGroup.Status is ChatMemberStatusCreator or ChatMemberStatusAdministrator { Rights.CanManageTags: true };
+            var can_edit_rank = basicGroup.Status is ChatMemberStatusRestricted { Permissions.CanEditTag: true } || chat.Permissions.CanEditTag;
+
+            if (member.MemberId.IsUser(myId))
+            {
+                return can_manage_ranks || can_edit_rank;
+            }
+            else if (member.Status is ChatMemberStatusAdministrator administrator)
+            {
+                return administrator.CanBeEdited;
+            }
+
+            return can_manage_ranks;
+        }
+
+        public static string GetTag(this ChatMember member)
+        {
+            return member.Status switch
+            {
+                ChatMemberStatusCreator => string.IsNullOrEmpty(member.Tag) ? Strings.ChatTagOwner : member.Tag,
+                ChatMemberStatusAdministrator => string.IsNullOrEmpty(member.Tag) ? Strings.ChatTagAdmin : member.Tag,
+                _ => member.Tag
+            };
         }
 
         public static bool CanInviteUsers(this Supergroup supergroup, Chat chat)

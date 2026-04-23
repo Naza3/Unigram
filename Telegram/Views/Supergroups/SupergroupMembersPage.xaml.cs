@@ -15,11 +15,12 @@ using Telegram.ViewModels.Delegates;
 using Telegram.ViewModels.Supergroups;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
+using Windows.UI.Xaml.Controls.Primitives;
 using Windows.UI.Xaml.Input;
 
 namespace Telegram.Views.Supergroups
 {
-    public sealed partial class SupergroupMembersPage : HostedPage, IBasicAndSupergroupDelegate, ISearchablePage
+    public sealed partial class SupergroupMembersPage : HostedPage, ISupergroupMembersDelegate, ISearchablePage
     {
         public SupergroupMembersViewModel ViewModel => DataContext as SupergroupMembersViewModel;
 
@@ -72,9 +73,14 @@ namespace Telegram.Views.Supergroups
 
             var flyout = new MenuFlyout();
 
+            if (ViewModel.ClientService.CanEditTag(chat, member))
+            {
+                flyout.CreateFlyoutItem(ViewModel.EditTag, member, member.Status is ChatMemberStatusAdministrator or ChatMemberStatusCreator ? Strings.EditAdminTag : Strings.EditMemberTag, Icons.PersonTag);
+            }
+
             if (chat.Type is ChatTypeSupergroup)
             {
-                flyout.CreateFlyoutItem(MemberPromote_Loaded, ViewModel.PromoteMember, chat.Type, status, member, member.Status is ChatMemberStatusAdministrator ? Strings.EditAdminRights : Strings.SetAsAdmin, Icons.Star);
+                flyout.CreateFlyoutItem(MemberPromote_Loaded, ViewModel.PromoteMember, chat.Type, status, member, member.Status is ChatMemberStatusAdministrator ? Strings.EditAdminRights : Strings.SetAsAdmin, Icons.ShieldStar);
                 flyout.CreateFlyoutItem(MemberRestrict_Loaded, ViewModel.RestrictMember, chat.Type, status, member, member.Status is ChatMemberStatusRestricted ? Strings.ChangePermissions : Strings.KickFromSupergroup, Icons.LockClosed);
             }
 
@@ -163,7 +169,7 @@ namespace Telegram.Views.Supergroups
             }
             else if (args.ItemContainer.ContentTemplateRoot is ProfileCell cell)
             {
-                cell.UpdateSupergroupMember(ViewModel.ClientService, args, OnContainerContentChanging);
+                cell.UpdateChatSharedMembers(ViewModel.ClientService, args, OnContainerContentChanging);
             }
         }
 
@@ -183,10 +189,14 @@ namespace Telegram.Views.Supergroups
                 HideMembers.Visibility = Visibility.Collapsed;
             }
 
+            ViewModel.UpdateEditTags(chat.Permissions.CanEditTag);
+
             Title = group.IsChannel ? Strings.ChannelSubscribers : Strings.ChannelMembers;
 
             AddNew.Content = group.IsChannel ? Strings.AddSubscriber : Strings.AddMember;
             AddNewPanel.Visibility = group.CanInviteUsers(chat) ? Visibility.Visible : Visibility.Collapsed;
+
+            EditTags.Visibility = group.CanRestrictMembers() && !group.IsChannel ? Visibility.Visible : Visibility.Collapsed;
 
             Footer.Visibility = group.IsChannel ? Visibility.Visible : Visibility.Collapsed;
         }
@@ -203,8 +213,12 @@ namespace Telegram.Views.Supergroups
                 HideMembers.Visibility = Visibility.Collapsed;
             }
 
+            ViewModel.UpdateEditTags(chat.Permissions.CanEditTag);
+
             AddNew.Content = Strings.AddMember;
             AddNewPanel.Visibility = group.CanInviteUsers(chat) ? Visibility.Visible : Visibility.Collapsed;
+
+            EditTags.Visibility = group.CanRestrictMembers() ? Visibility.Visible : Visibility.Collapsed;
 
             Footer.Visibility = Visibility.Collapsed;
         }
@@ -212,6 +226,14 @@ namespace Telegram.Views.Supergroups
         public void UpdateChat(Chat chat) { }
         public void UpdateChatTitle(Chat chat) { }
         public void UpdateChatPhoto(Chat chat) { }
+
+        public void UpdateMember(ChatMember member)
+        {
+            var container = ScrollingHost.ContainerFromItem(member) as SelectorItem;
+            var content = container?.ContentTemplateRoot as ProfileCell;
+
+            content?.UpdateChatSharedMembers(ViewModel.ClientService, member);
+        }
 
         #endregion
     }

@@ -54,6 +54,7 @@ namespace Telegram.ViewModels.Delegates
         void OpenGame(MessageViewModel message);
         void OpenInlineButton(MessageViewModel message, InlineKeyboardButton button);
         void OpenMedia(MessageViewModel message, FrameworkElement target, double timestamp = 0);
+        void OpenPoll(MessageViewModel message);
         void OpenPaidMedia(MessageViewModel message, PaidMedia media, FrameworkElement target, double timestamp = 0);
         void PlayMessage(MessageViewModel message);
         bool RecognizeSpeech(MessageViewModel message);
@@ -79,8 +80,8 @@ namespace Telegram.ViewModels.Delegates
 
         void HideSponsoredMessage(MessageViewModel message);
 
-        string GetAdminTitle(MessageViewModel message);
+        string GetMemberTag(MessageViewModel message, out ChatMemberRank rank);
         bool IsAdministrator(MessageSender memberId);
-        void UpdateAdministrators(long chatId);
+        void UpdateAdministrators(Chat chat);
     }
 }

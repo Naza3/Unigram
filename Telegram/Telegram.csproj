@@ -149,6 +149,7 @@
     <Compile Include="Assets\Icons\Notifications.cs" />
     <Compile Include="Assets\Icons\PersonAdd.cs" />
     <Compile Include="Assets\Icons\Phone.cs" />
+    <Compile Include="Assets\Icons\PollSelect.cs" />
     <Compile Include="Assets\Icons\PowerSaving.cs" />
     <Compile Include="Assets\Icons\PremiumStars.cs" />
     <Compile Include="Assets\Icons\Premium.cs" />
@@ -396,6 +397,9 @@
     </Compile>
     <Compile Include="Controls\Messages\MessageSummary.xaml.cs">
       <DependentUpon>MessageSummary.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\Messages\Service\MessageChatHasProtectedContentDisableRequestedContent.xaml.cs">
+      <DependentUpon>MessageChatHasProtectedContentDisableRequestedContent.xaml</DependentUpon>
     </Compile>
     <Compile Include="Controls\Messages\Service\MessageUpgradedGiftPurchaseOfferContent.xaml.cs">
       <DependentUpon>MessageUpgradedGiftPurchaseOfferContent.xaml</DependentUpon>
@@ -687,6 +691,7 @@
     <Compile Include="ViewModels\Delegates\IDirectMessagesTopicDelegate.cs" />
     <Compile Include="ViewModels\Delegates\IReactionsDelegate.cs" />
     <Compile Include="ViewModels\Delegates\ISavedMessagesChatsDelegate.cs" />
+    <Compile Include="ViewModels\Delegates\ISupergroupMembersDelegate.cs" />
     <Compile Include="ViewModels\Delegates\ITopicListDelegate.cs" />
     <Compile Include="ViewModels\DialogBusinessRepliesViewModel.cs" />
     <Compile Include="ViewModels\Dialogs\DialogPendingTextMessage.cs" />
@@ -1317,6 +1322,21 @@
     <Compile Include="Services\CaptureSessionService.cs" />
     <Compile Include="Views\Popups\AddProxyPopup.xaml.cs">
       <DependentUpon>AddProxyPopup.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\Popups\DisableSharingPopup.xaml.cs">
+      <DependentUpon>DisableSharingPopup.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\Popups\TextEditorPopup.xaml.cs">
+      <DependentUpon>TextEditorPopup.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\Popups\MemberTagEditPopup.xaml.cs">
+      <DependentUpon>MemberTagEditPopup.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\Popups\MemberTagInfoPopup.xaml.cs">
+      <DependentUpon>MemberTagInfoPopup.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\Popups\OAuthPopup.xaml.cs">
+      <DependentUpon>OAuthPopup.xaml</DependentUpon>
     </Compile>
     <Compile Include="Views\Popups\StakeDicePopup.xaml.cs">
       <DependentUpon>StakeDicePopup.xaml</DependentUpon>
@@ -2319,6 +2339,7 @@
     <Content Include="Assets\Animations\Cocoon.webp" />
     <Content Include="Assets\Animations\GiftCraftingFailed.tgs" />
     <Content Include="Assets\Animations\GiftCrafting.tgs" />
+    <Content Include="Assets\Animations\DisableSharing.tgs" />
     <None Include="Assets\i420.hlsl" />
     <Content Include="Assets\Images\Reply.scale-100.png" />
     <Content Include="Assets\Images\Reply.scale-125.png" />
@@ -3080,6 +3101,10 @@
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
+    <Page Include="Controls\Messages\Service\MessageChatHasProtectedContentDisableRequestedContent.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
     <Page Include="Controls\Messages\Service\MessageUpgradedGiftPurchaseOfferContent.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
@@ -3461,6 +3486,26 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="Views\Popups\AddProxyPopup.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Views\Popups\DisableSharingPopup.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Views\Popups\TextEditorPopup.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Views\Popups\MemberTagEditPopup.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\Popups\MemberTagInfoPopup.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\Popups\OAuthPopup.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>

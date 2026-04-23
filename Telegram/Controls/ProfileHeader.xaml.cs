@@ -1422,7 +1422,7 @@ namespace Telegram.Controls
 
         private void About_ContextRequested(UIElement sender, ContextRequestedEventArgs args)
         {
-            MessageHelper.Hyperlink_ContextRequested(ViewModel.TranslateService, sender, args);
+            MessageHelper.Hyperlink_ContextRequested(ViewModel.TranslateService, sender, args, null);
         }
 
         private void About_ContextMenuOpening(object sender, ContextMenuEventArgs e)
@@ -1581,6 +1581,7 @@ namespace Telegram.Controls
                     if (user.Type is UserTypeRegular && !user.IsSupport)
                     {
                         flyout.CreateFlyoutItem(ViewModel.CreateSecretChat, Strings.StartEncryptedChat, Icons.LockClosed);
+                        flyout.CreateFlyoutItem(ViewModel.ToggleProtectedContent, chat.HasProtectedContent ? Strings.EnableSharing : Strings.DisableSharing, chat.HasProtectedContent ? Icons.Share : Icons.ShareOff);
                     }
                 }
                 else

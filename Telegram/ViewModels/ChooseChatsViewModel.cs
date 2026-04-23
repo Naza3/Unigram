@@ -700,6 +700,7 @@ namespace Telegram.ViewModels
                     { "reply_to", replyToMessage.Message },
                     { "reply_to_quote", replyToMessage.Quote },
                     { "reply_to_task_id", replyToMessage.ChecklistTaskId },
+                    { "reply_to_option_id", replyToMessage.PollOptionId },
                 });
             }
             else if (_configuration is ChooseChatsConfigurationShareGame shareGame)
@@ -873,7 +874,7 @@ namespace Telegram.ViewModels
                     .Select(x => x.Type is ChatTypePrivate privata ? privata.UserId : 0)
                     .Where(x => x != 0)
                     .ToList();
-                ClientService.Send(new ShareUsersWithBot(requestUsers.ChatId, requestUsers.MessageId, requestUsers.Id, userIds, false));
+                ClientService.Send(new ShareUsersWithBot(requestUsers.Source, requestUsers.Id, userIds, false));
             }
             else if (_configuration is ChooseChatsConfigurationVerifyChat verifyChat && ClientService.TryGetUserFull(verifyChat.BotUserId, out UserFullInfo verifyChatFullInfo))
             {
@@ -1014,7 +1015,7 @@ namespace Telegram.ViewModels
                             continue;
                         }
 
-                        Aggregator.Publish(new UpdateChatMember(chat.Id, 0, 0, null, false, false, null, new ChatMember(new MessageSenderUser(user.Id), ClientService.Options.MyId, DateTime.Now.ToTimestamp(), new ChatMemberStatusMember())));
+                        Aggregator.Publish(new UpdateChatMember(chat.Id, 0, 0, null, false, false, null, new ChatMember(new MessageSenderUser(user.Id), string.Empty, ClientService.Options.MyId, DateTime.Now.ToTimestamp(), new ChatMemberStatusMember())));
                     }
                 }
                 else if (response is Error error)

@@ -28,7 +28,18 @@
                                 Grid.Row="1">
             <ListView.ItemTemplate>
                 <DataTemplate>
-                    <cells:ProfileCell />
+                    <cells:ProfileCell>
+                        <controls:BadgeControl VerticalAlignment="Center">
+                            <controls:BadgeControl.Style>
+                                <Style TargetType="controls:BadgeControl">
+                                    <Setter Property="Foreground"
+                                            Value="{ThemeResource SystemControlDisabledChromeDisabledLowBrush}" />
+                                    <Setter Property="Background"
+                                            Value="Transparent" />
+                                </Style>
+                            </controls:BadgeControl.Style>
+                        </controls:BadgeControl>
+                    </cells:ProfileCell>
                 </DataTemplate>
             </ListView.ItemTemplate>
             <ListView.Header>
@@ -59,6 +70,14 @@
                                               Visibility="Collapsed">
                         <CheckBox Content="{CustomResource ChannelHideMembers}"
                                   IsChecked="{x:Bind ViewModel.HasHiddenMembers, Mode=TwoWay}"
+                                  Style="{StaticResource SettingsCheckBoxStyle}" />
+                    </controls:HeaderedControl>
+
+                    <controls:HeaderedControl x:Name="EditTags"
+                                              Footer="{CustomResource ChannelMemberTagsInfo}"
+                                              Visibility="Collapsed">
+                        <CheckBox Content="{CustomResource ChannelMemberTags}"
+                                  IsChecked="{x:Bind ViewModel.CanEditTags, Mode=TwoWay}"
                                   Style="{StaticResource SettingsCheckBoxStyle}" />
                     </controls:HeaderedControl>
 

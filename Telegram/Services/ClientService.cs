@@ -113,6 +113,8 @@ namespace Telegram.Services
 
         IList<string> ActiveReactions { get; }
 
+        IList<TextCompositionStyle> TextCompositionStyles { get; }
+
         IList<string> AnimationSearchEmojis { get; }
         string AnimationSearchProvider { get; }
 
@@ -182,6 +184,7 @@ namespace Telegram.Services
         bool CanPostMessages(Chat chat);
         bool CanInviteUsers(Chat chat);
         bool CanPromoteMembers(Chat chat);
+        bool CanEditTag(Chat chat, ChatMember member);
 
         Object GetMessageSender(MessageSender sender);
         bool TryGetMessageSender(MessageSender sender, out Object value);
@@ -352,6 +355,7 @@ namespace Telegram.Services
         private IList<long> _installedStickerSets;
         private IList<long> _installedMaskSets;
         private IList<long> _installedEmojiSets;
+        private IList<TextCompositionStyle> _textCompositionStyles;
 
         private ReactionType _defaultReaction;
 
@@ -807,6 +811,8 @@ namespace Telegram.Services
 
         public IList<string> ActiveReactions => _activeReactions;
 
+        public IList<TextCompositionStyle> TextCompositionStyles => _textCompositionStyles ?? Array.Empty<TextCompositionStyle>();
+
         public IDictionary<int, NameColor> AccentColors { get; private set; }
         public IList<int> AvailableAccentColors { get; private set; }
 
@@ -1088,13 +1094,15 @@ namespace Telegram.Services
         public void GetReplyTo(MessageViewModel message, Action<Object> handler)
         {
             if (message.ReplyTo is MessageReplyToMessage replyToMessage ||
-                message.Content is MessagePinMessage ||
-                message.Content is MessageGameScore ||
-                message.Content is MessagePaymentSuccessful ||
-                message.Content is MessageChecklistTasksAdded ||
-                message.Content is MessageChecklistTasksDone ||
-                message.Content is MessageSuggestedPostPaid ||
-                message.Content is MessageSuggestedPostRefunded)
+                message.Content is MessagePinMessage or
+                MessageGameScore or
+                MessagePaymentSuccessful or
+                MessageChecklistTasksAdded or
+                MessageChecklistTasksDone or
+                MessagePollOptionAdded or
+                MessagePollOptionDeleted or
+                MessageSuggestedPostPaid or 
+                MessageSuggestedPostRefunded)
             {
                 Send(new GetRepliedMessage(message.ChatId, message.Id), handler);
             }
@@ -2076,6 +2084,20 @@ namespace Telegram.Services
             return true;
         }
 
+        public bool CanEditTag(Chat chat, ChatMember member)
+        {
+            if (TryGetSupergroup(chat, out Supergroup supergroup))
+            {
+                return supergroup.CanEditTag(chat, member, Options.MyId);
+            }
+            else if (TryGetBasicGroup(chat, out BasicGroup basicGroup))
+            {
+                return basicGroup.CanEditTag(chat, member, Options.MyId);
+            }
+
+            return false;
+        }
+
         public Object GetMessageSender(MessageSender sender)
         {
             if (sender is MessageSenderUser user)
@@ -2375,7 +2397,7 @@ namespace Telegram.Services
                 }
                 else if (supergroup.Status is ChatMemberStatusCreator or ChatMemberStatusAdministrator)
                 {
-                    return new ChatPermissions(true, true, true, true, true, true, true, true, true, true, true, true, true, true);
+                    return new ChatPermissions(true, true, true, true, true, true, true, true, true, true, true, true, true, true, true);
                 }
             }
             else if (TryGetBasicGroup(chat, out var basicGroup))
@@ -2387,7 +2409,7 @@ namespace Telegram.Services
                 }
                 else if (basicGroup.Status is ChatMemberStatusCreator or ChatMemberStatusAdministrator)
                 {
-                    return new ChatPermissions(true, true, true, true, true, true, true, true, true, true, true, true, true, true);
+                    return new ChatPermissions(true, true, true, true, true, true, true, true, true, true, true, true, true, true, true);
                 }
             }
 
@@ -2917,17 +2939,17 @@ namespace Telegram.Services
             var id = reader.GetInt32();
             if (_files.TryGetValue(id, out File obj))
             {
-                if (!updateFile)
-                {
-                    var depth = reader.CurrentDepth;
+                //if (!updateFile)
+                //{
+                //    var depth = reader.CurrentDepth;
 
-                    do
-                    {
-                        reader.Read();
-                    }
-                    while (depth <= reader.CurrentDepth);
-                    return obj;
-                }
+                //    do
+                //    {
+                //        reader.Read();
+                //    }
+                //    while (depth <= reader.CurrentDepth);
+                //    return obj;
+                //}
             }
             else
             {
@@ -3515,7 +3537,7 @@ namespace Telegram.Services
                     {
                         if (_chats.TryGetValue(updateChatReplyMarkup.ChatId, out Chat value))
                         {
-                            value.ReplyMarkupMessageId = updateChatReplyMarkup.ReplyMarkupMessageId;
+                            value.ReplyMarkupMessageId = updateChatReplyMarkup.ReplyMarkupMessage?.Id ?? 0;
                         }
 
                         break;
@@ -3569,6 +3591,16 @@ namespace Telegram.Services
                         if (_chats.TryGetValue(updateChatUnreadReactionCount.ChatId, out Chat value))
                         {
                             value.UnreadReactionCount = updateChatUnreadReactionCount.UnreadReactionCount;
+                        }
+
+                        break;
+                    }
+
+                case UpdateChatUnreadPollVoteCount updateChatUnreadPollVoteCount:
+                    {
+                        if (_chats.TryGetValue(updateChatUnreadPollVoteCount.ChatId, out Chat value))
+                        {
+                            value.UnreadPollVoteCount = updateChatUnreadPollVoteCount.UnreadPollVoteCount;
                         }
 
                         break;
@@ -3710,6 +3742,9 @@ namespace Telegram.Services
                     break;
                 case UpdateSavedAnimations updateSavedAnimations:
                     _savedAnimations = updateSavedAnimations.AnimationIds;
+                    break;
+                case UpdateTextCompositionStyles updateTextCompositionStyles:
+                    _textCompositionStyles = updateTextCompositionStyles.Styles;
                     break;
                 case UpdateScopeNotificationSettings updateScopeNotificationSettings:
                     _settings.Notifications.Scope[updateScopeNotificationSettings.Scope.GetType()] = updateScopeNotificationSettings.NotificationSettings;
